@@ -3,29 +3,69 @@ package defs
 import (
 	"bytes"
 	"crypto/rand"
+	"encoding/json"
 	"fmt"
 	"io"
-	"log"
+
+	//"log"
 	"sync"
 	"time"
+
+	log "github.com/sirupsen/logrus"
 )
+
+type JSONProgress struct {
+	Bandwidth int     `json:"bandwidth"`
+	Bytes     int     `json:"bytes"`
+	Elapsed   int64   `json:"elapsed"`
+	Progress  float64 `json:"progress"`
+}
+
+type JSONPingUpdate struct {
+	Jitter   float64 `json:"jitter"`
+	Latency  float64 `json:"latency"`
+	Progress float64 `json:"progress"`
+}
+
+type JSONDownloadProgress struct {
+	Type      string       `json:"type"`
+	Timestamp time.Time    `json:"timestamp"`
+	Download  JSONProgress `json:"download"`
+}
+
+type JSONPingProgress struct {
+	Type      string         `json:"type"`
+	Timestamp time.Time      `json:"timestamp"`
+	Ping      JSONPingUpdate `json:"ping"`
+}
+
+type JSONUploadProgress struct {
+	Type      string       `json:"type"`
+	Timestamp time.Time    `json:"timestamp"`
+	Upload    JSONProgress `json:"upload"`
+}
 
 // BytesCounter implements io.Reader and io.Writer interface, for counting bytes being read/written in HTTP requests
 type BytesCounter struct {
-	start      time.Time
-	pos        int
-	total      int
-	payload    []byte
-	reader     io.ReadSeeker
-	mebi       bool
-	uploadSize int
+	start              time.Time
+	pos                int
+	total              int
+	payload            []byte
+	reader             io.ReadSeeker
+	mebi               bool
+	uploadSize         int
+	lastProgress       time.Time
+	progressIntervalMs int64
+	transferType       string
+	duration           int64
 
 	lock *sync.Mutex
 }
 
 func NewCounter() *BytesCounter {
 	return &BytesCounter{
-		lock: &sync.Mutex{},
+		progressIntervalMs: 100,
+		lock:               &sync.Mutex{},
 	}
 }
 
@@ -35,6 +75,26 @@ func (c *BytesCounter) Write(p []byte) (int, error) {
 	c.lock.Lock()
 	c.total += n
 	c.lock.Unlock()
+
+	if time.Since(c.lastProgress).Milliseconds() > c.progressIntervalMs && c.transferType == "download" {
+		var progress JSONDownloadProgress
+		progress.Timestamp = time.Now()
+		progress.Type = "download"
+		progress.Download.Bytes = c.total
+		progress.Download.Elapsed = time.Since(c.start).Milliseconds()
+		progress.Download.Bandwidth = int(float64(progress.Download.Bytes) / (float64(time.Since(c.start).Milliseconds()) / 1000))
+		progress.Download.Progress = float64(progress.Download.Elapsed) / float64(c.duration)
+		if progress.Download.Progress > 1 {
+			progress.Download.Progress = 1
+		}
+
+		if b, err := json.Marshal(&progress); err != nil {
+			log.Errorf("Error generating progress update: %s", err)
+		} else {
+			log.Warnf("%s", b)
+		}
+		c.lastProgress = time.Now()
+	}
 
 	return n, nil
 }
@@ -50,12 +110,42 @@ func (c *BytesCounter) Read(p []byte) (int, error) {
 	}
 	c.lock.Unlock()
 
+	if time.Since(c.lastProgress).Milliseconds() > c.progressIntervalMs && c.transferType == "upload" {
+		var progress JSONUploadProgress
+		progress.Timestamp = time.Now()
+		progress.Type = "upload"
+		progress.Upload.Bytes = c.total
+		progress.Upload.Elapsed = time.Since(c.start).Milliseconds()
+		progress.Upload.Bandwidth = int(float64(progress.Upload.Bytes) / (float64(time.Since(c.start).Milliseconds()) / 1000))
+		progress.Upload.Progress = float64(progress.Upload.Elapsed) / float64(c.duration)
+		if progress.Upload.Progress > 1 {
+			progress.Upload.Progress = 1
+		}
+
+		if b, err := json.Marshal(&progress); err != nil {
+			log.Errorf("Error generating progress update: %s", err)
+		} else {
+			log.Warnf("%s", b)
+		}
+		c.lastProgress = time.Now()
+	}
+
 	return n, err
 }
 
 // SetBase sets the base for dividing bytes into megabyte or mebibyte
 func (c *BytesCounter) SetMebi(mebi bool) {
 	c.mebi = mebi
+}
+
+// Sets the type of transfer (ping/download/upload)
+func (c *BytesCounter) SetTransferType(transferType string) {
+	c.transferType = transferType
+}
+
+// Set the duration of the test for progress tracking
+func (c *BytesCounter) SetDuration(duration int64) {
+	c.duration = duration
 }
 
 // SetUploadSize sets the size of payload being uploaded
@@ -113,6 +203,7 @@ func (c *BytesCounter) resetReader() (int64, error) {
 // Start will set the `start` field to current time
 func (c *BytesCounter) Start() {
 	c.start = time.Now()
+	c.lastProgress = c.start
 }
 
 // Total returns the total bytes read/written

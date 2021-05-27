@@ -113,6 +113,12 @@ func main() {
 					"\t affected by --bytes",
 			},
 			&cli.BoolFlag{
+				Name: defs.OptionJSONL,
+				Usage: "Suppress verbose output, show incremental updates and summary\n" +
+					"\tin JSONL format. Speeds listed in bit/s and not\n" +
+					"\t affected by --bytes",
+			},
+			&cli.BoolFlag{
 				Name:  defs.OptionList,
 				Usage: "Display a list of LibreSpeed.org servers",
 			},

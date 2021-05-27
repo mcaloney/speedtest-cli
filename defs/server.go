@@ -196,6 +196,8 @@ func (s *Server) Download(silent bool, useBytes, useMebi bool, requests int, chu
 
 	counter := NewCounter()
 	counter.SetMebi(useMebi)
+	counter.SetTransferType("download")
+	counter.SetDuration(duration.Milliseconds())
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -289,6 +291,8 @@ func (s *Server) Upload(noPrealloc, silent, useBytes, useMebi bool, requests int
 	counter := NewCounter()
 	counter.SetMebi(useMebi)
 	counter.SetUploadSize(uploadSize)
+	counter.SetTransferType("upload")
+	counter.SetDuration(duration.Milliseconds())
 
 	if noPrealloc {
 		log.Info("Pre-allocation is disabled, performance might be lower!")

@@ -47,7 +47,7 @@ type PingResult struct {
 func SpeedTest(c *cli.Context) error {
 	// check for suppressed output flags
 	var silent bool
-	if c.Bool(defs.OptionSimple) || c.Bool(defs.OptionJSON) || c.Bool(defs.OptionCSV) {
+	if c.Bool(defs.OptionSimple) || c.Bool(defs.OptionJSON) || c.Bool(defs.OptionJSONL) || c.Bool(defs.OptionCSV) {
 		log.SetLevel(log.WarnLevel)
 		silent = true
 	}
