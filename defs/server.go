@@ -129,6 +129,35 @@ func (s *Server) ICMPPingAndJitter(count int, srcIp, network string) (float64, f
 
 // PingAndJitter pings the server via accessing ping URL and calculate the average ping and jitter
 func (s *Server) PingAndJitter(count int) (float64, float64, error) {
+	type JSONPingProgress struct {
+		Type      string    `json:"type"`
+		Timestamp time.Time `json:"timestamp"`
+		Ping      struct {
+			Jitter   float64 `json:"jitter"`
+			Latency  float64 `json:"latency"`
+			Progress float64 `json:"progress"`
+		} `json:"ping"`
+	}
+
+	getJitter := func(pings []float64) float64 {
+		var lastPing, jitter float64
+		for idx, p := range pings {
+			if idx != 0 {
+				instJitter := math.Abs(lastPing - p)
+				if idx > 1 {
+					if jitter > instJitter {
+						jitter = jitter*0.7 + instJitter*0.3
+					} else {
+						jitter = instJitter*0.2 + jitter*0.8
+					}
+				}
+			}
+			lastPing = p
+		}
+
+		return jitter
+	}
+
 	t := time.Now()
 	defer func() {
 		s.TLog.Logf("TCP ping took %s", time.Now().Sub(t).String())
@@ -162,6 +191,21 @@ func (s *Server) PingAndJitter(count int) (float64, float64, error) {
 		end := time.Now()
 
 		pings = append(pings, float64(end.Sub(start).Milliseconds()))
+
+		if i > 0 {
+			var progress JSONPingProgress
+			progress.Timestamp = end
+			progress.Type = "ping"
+			progress.Ping.Latency = pings[len(pings)-1]
+			progress.Ping.Jitter = getJitter(pings[1:])
+			progress.Ping.Progress = float64(i) / float64(count)
+
+			if b, err := json.Marshal(&progress); err != nil {
+				log.Errorf("Error generating progress update: %s", err)
+			} else {
+				log.Warnf("%s", b)
+			}
+		}
 	}
 
 	// discard first result due to handshake overhead
@@ -169,22 +213,7 @@ func (s *Server) PingAndJitter(count int) (float64, float64, error) {
 		pings = pings[1:]
 	}
 
-	var lastPing, jitter float64
-	for idx, p := range pings {
-		if idx != 0 {
-			instJitter := math.Abs(lastPing - p)
-			if idx > 1 {
-				if jitter > instJitter {
-					jitter = jitter*0.7 + instJitter*0.3
-				} else {
-					jitter = instJitter*0.2 + jitter*0.8
-				}
-			}
-		}
-		lastPing = p
-	}
-
-	return getAvg(pings), jitter, nil
+	return getAvg(pings), getJitter(pings), nil
 }
 
 // Download performs the actual download test

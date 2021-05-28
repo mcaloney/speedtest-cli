@@ -21,22 +21,10 @@ type JSONProgress struct {
 	Progress  float64 `json:"progress"`
 }
 
-type JSONPingUpdate struct {
-	Jitter   float64 `json:"jitter"`
-	Latency  float64 `json:"latency"`
-	Progress float64 `json:"progress"`
-}
-
 type JSONDownloadProgress struct {
 	Type      string       `json:"type"`
 	Timestamp time.Time    `json:"timestamp"`
 	Download  JSONProgress `json:"download"`
-}
-
-type JSONPingProgress struct {
-	Type      string         `json:"type"`
-	Timestamp time.Time      `json:"timestamp"`
-	Ping      JSONPingUpdate `json:"ping"`
 }
 
 type JSONUploadProgress struct {
