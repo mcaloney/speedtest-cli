@@ -217,7 +217,7 @@ func (s *Server) PingAndJitter(count int) (float64, float64, error) {
 }
 
 // Download performs the actual download test
-func (s *Server) Download(silent bool, useBytes, useMebi bool, requests int, chunks int, duration time.Duration) (float64, int, error) {
+func (s *Server) Download(silent bool, useBytes, useMebi bool, requests int, chunks int, duration time.Duration, incrementalProgress bool) (float64, int, error) {
 	t := time.Now()
 	defer func() {
 		s.TLog.Logf("Download took %s", time.Now().Sub(t).String())
@@ -268,6 +268,41 @@ func (s *Server) Download(silent bool, useBytes, useMebi bool, requests int, chu
 		}
 	}
 
+	updateProgress := func() {
+		type JSONDownloadProgress struct {
+			Type      string    `json:"type"`
+			Timestamp time.Time `json:"timestamp"`
+			Download  struct {
+				Bandwidth int     `json:"bandwidth"`
+				Bytes     int     `json:"bytes"`
+				Elapsed   int64   `json:"elapsed"`
+				Progress  float64 `json:"progress"`
+			} `json:"download"`
+		}
+
+		var progress JSONDownloadProgress
+
+		for time.Since(counter.start).Milliseconds() < duration.Milliseconds() {
+			time.Sleep(100 * time.Millisecond)
+
+			progress.Timestamp = time.Now()
+			progress.Type = "download"
+			progress.Download.Bytes = counter.total
+			progress.Download.Elapsed = time.Since(counter.start).Milliseconds()
+			progress.Download.Bandwidth = int(float64(progress.Download.Bytes) / (float64(time.Since(counter.start).Milliseconds()) / 1000))
+			progress.Download.Progress = float64(progress.Download.Elapsed) / float64(counter.duration)
+			if progress.Download.Progress > 1 {
+				progress.Download.Progress = 1
+			}
+
+			if b, err := json.Marshal(&progress); err != nil {
+				log.Errorf("Error generating progress update: %s", err)
+			} else {
+				log.Warnf("%s", b)
+			}
+		}
+	}
+
 	counter.Start()
 	if !silent {
 		pb := spinner.New(spinner.CharSets[11], 100*time.Millisecond)
@@ -291,6 +326,10 @@ func (s *Server) Download(silent bool, useBytes, useMebi bool, requests int, chu
 		}()
 	}
 
+	if incrementalProgress {
+		go updateProgress()
+	}
+
 	for i := 0; i < requests; i++ {
 		go doDownload()
 		time.Sleep(200 * time.Millisecond)
@@ -311,7 +350,7 @@ Loop:
 }
 
 // Upload performs the actual upload test
-func (s *Server) Upload(noPrealloc, silent, useBytes, useMebi bool, requests int, uploadSize int, duration time.Duration) (float64, int, error) {
+func (s *Server) Upload(noPrealloc, silent, useBytes, useMebi bool, requests int, uploadSize int, duration time.Duration, incrementalProgress bool) (float64, int, error) {
 	t := time.Now()
 	defer func() {
 		s.TLog.Logf("Upload took %s", time.Now().Sub(t).String())
@@ -363,6 +402,40 @@ func (s *Server) Upload(noPrealloc, silent, useBytes, useMebi bool, requests int
 		}
 	}
 
+	updateProgress := func() {
+		type JSONUploadProgress struct {
+			Type      string    `json:"type"`
+			Timestamp time.Time `json:"timestamp"`
+			Upload    struct {
+				Bandwidth int     `json:"bandwidth"`
+				Bytes     int     `json:"bytes"`
+				Elapsed   int64   `json:"elapsed"`
+				Progress  float64 `json:"progress"`
+			} `json:"upload"`
+		}
+
+		var progress JSONUploadProgress
+		for time.Since(counter.start).Milliseconds() < duration.Milliseconds() {
+			time.Sleep(100 * time.Millisecond)
+
+			progress.Timestamp = time.Now()
+			progress.Type = "upload"
+			progress.Upload.Bytes = counter.total
+			progress.Upload.Elapsed = time.Since(counter.start).Milliseconds()
+			progress.Upload.Bandwidth = int(float64(progress.Upload.Bytes) / (float64(time.Since(counter.start).Milliseconds()) / 1000))
+			progress.Upload.Progress = float64(progress.Upload.Elapsed) / float64(counter.duration)
+			if progress.Upload.Progress > 1 {
+				progress.Upload.Progress = 1
+			}
+
+			if b, err := json.Marshal(&progress); err != nil {
+				log.Errorf("Error generating progress update: %s", err)
+			} else {
+				log.Warnf("%s", b)
+			}
+		}
+	}
+
 	counter.Start()
 	if !silent {
 		pb := spinner.New(spinner.CharSets[11], 100*time.Millisecond)
@@ -384,6 +457,10 @@ func (s *Server) Upload(noPrealloc, silent, useBytes, useMebi bool, requests int
 			}
 			pb.Stop()
 		}()
+	}
+
+	if incrementalProgress {
+		go updateProgress()
 	}
 
 	for i := 0; i < requests; i++ {

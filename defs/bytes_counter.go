@@ -3,35 +3,13 @@ package defs
 import (
 	"bytes"
 	"crypto/rand"
-	"encoding/json"
 	"fmt"
 	"io"
 
-	//"log"
+	"log"
 	"sync"
 	"time"
-
-	log "github.com/sirupsen/logrus"
 )
-
-type JSONProgress struct {
-	Bandwidth int     `json:"bandwidth"`
-	Bytes     int     `json:"bytes"`
-	Elapsed   int64   `json:"elapsed"`
-	Progress  float64 `json:"progress"`
-}
-
-type JSONDownloadProgress struct {
-	Type      string       `json:"type"`
-	Timestamp time.Time    `json:"timestamp"`
-	Download  JSONProgress `json:"download"`
-}
-
-type JSONUploadProgress struct {
-	Type      string       `json:"type"`
-	Timestamp time.Time    `json:"timestamp"`
-	Upload    JSONProgress `json:"upload"`
-}
 
 // BytesCounter implements io.Reader and io.Writer interface, for counting bytes being read/written in HTTP requests
 type BytesCounter struct {
@@ -64,26 +42,6 @@ func (c *BytesCounter) Write(p []byte) (int, error) {
 	c.total += n
 	c.lock.Unlock()
 
-	if time.Since(c.lastProgress).Milliseconds() > c.progressIntervalMs && c.transferType == "download" {
-		var progress JSONDownloadProgress
-		progress.Timestamp = time.Now()
-		progress.Type = "download"
-		progress.Download.Bytes = c.total
-		progress.Download.Elapsed = time.Since(c.start).Milliseconds()
-		progress.Download.Bandwidth = int(float64(progress.Download.Bytes) / (float64(time.Since(c.start).Milliseconds()) / 1000))
-		progress.Download.Progress = float64(progress.Download.Elapsed) / float64(c.duration)
-		if progress.Download.Progress > 1 {
-			progress.Download.Progress = 1
-		}
-
-		if b, err := json.Marshal(&progress); err != nil {
-			log.Errorf("Error generating progress update: %s", err)
-		} else {
-			log.Warnf("%s", b)
-		}
-		c.lastProgress = time.Now()
-	}
-
 	return n, nil
 }
 
@@ -97,26 +55,6 @@ func (c *BytesCounter) Read(p []byte) (int, error) {
 		c.resetReader()
 	}
 	c.lock.Unlock()
-
-	if time.Since(c.lastProgress).Milliseconds() > c.progressIntervalMs && c.transferType == "upload" {
-		var progress JSONUploadProgress
-		progress.Timestamp = time.Now()
-		progress.Type = "upload"
-		progress.Upload.Bytes = c.total
-		progress.Upload.Elapsed = time.Since(c.start).Milliseconds()
-		progress.Upload.Bandwidth = int(float64(progress.Upload.Bytes) / (float64(time.Since(c.start).Milliseconds()) / 1000))
-		progress.Upload.Progress = float64(progress.Upload.Elapsed) / float64(c.duration)
-		if progress.Upload.Progress > 1 {
-			progress.Upload.Progress = 1
-		}
-
-		if b, err := json.Marshal(&progress); err != nil {
-			log.Errorf("Error generating progress update: %s", err)
-		} else {
-			log.Warnf("%s", b)
-		}
-		c.lastProgress = time.Now()
-	}
 
 	return n, err
 }
