@@ -32,9 +32,9 @@ type Server struct {
 	SponsorName string `json:"sponsorName"`
 	SponsorURL  string `json:"sponsorURL"`
 
-	NoICMP         bool         `json:"-"`
-	SuppressOutput bool         `json:"-"`
-	TLog           TelemetryLog `json:"-"`
+	NoICMP              bool         `json:"-"`
+	IncrementalProgress bool         `json:"-"`
+	TLog                TelemetryLog `json:"-"`
 }
 
 // IsUp checks the speed test backend is up by accessing the ping URL
@@ -183,7 +183,7 @@ func (s *Server) PingAndJitter(count int) (float64, float64, error) {
 
 		pings = append(pings, float64(end.Sub(start).Milliseconds()))
 
-		if i > 0 && !s.SuppressOutput {
+		if i > 0 && s.IncrementalProgress {
 			sendPingProgress(pings[len(pings)-1], getJitter(pings[1:]), float64(i)/float64(count))
 		}
 	}
@@ -197,7 +197,7 @@ func (s *Server) PingAndJitter(count int) (float64, float64, error) {
 }
 
 // Download performs the actual download test
-func (s *Server) Download(silent bool, useBytes, useMebi bool, requests int, chunks int, duration time.Duration, incrementalProgress bool) (float64, int, error) {
+func (s *Server) Download(silent bool, useBytes, useMebi bool, requests int, chunks int, duration time.Duration) (float64, int, error) {
 	t := time.Now()
 	defer func() {
 		s.TLog.Logf("Download took %s", time.Now().Sub(t).String())
@@ -277,7 +277,7 @@ func (s *Server) Download(silent bool, useBytes, useMebi bool, requests int, chu
 		}()
 	}
 
-	if incrementalProgress {
+	if s.IncrementalProgress {
 		go updateProgress()
 	}
 
@@ -301,7 +301,7 @@ Loop:
 }
 
 // Upload performs the actual upload test
-func (s *Server) Upload(noPrealloc, silent, useBytes, useMebi bool, requests int, uploadSize int, duration time.Duration, incrementalProgress bool) (float64, int, error) {
+func (s *Server) Upload(noPrealloc, silent, useBytes, useMebi bool, requests int, uploadSize int, duration time.Duration) (float64, int, error) {
 	t := time.Now()
 	defer func() {
 		s.TLog.Logf("Upload took %s", time.Now().Sub(t).String())
@@ -382,7 +382,7 @@ func (s *Server) Upload(noPrealloc, silent, useBytes, useMebi bool, requests int
 		}()
 	}
 
-	if incrementalProgress {
+	if s.IncrementalProgress {
 		go updateProgress()
 	}
 

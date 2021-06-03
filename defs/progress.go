@@ -47,7 +47,7 @@ func sendPingProgress(latency float64, jitter float64, progress float64) {
 	pingProgress.Ping.Jitter = jitter
 	pingProgress.Ping.Progress = progress
 
-	if b, err := json.Marshal(&progress); err != nil {
+	if b, err := json.Marshal(&pingProgress); err != nil {
 		log.Errorf("Error generating progress update: %s", err)
 	} else {
 		log.Warnf("%s", b)
