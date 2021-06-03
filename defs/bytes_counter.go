@@ -13,25 +13,20 @@ import (
 
 // BytesCounter implements io.Reader and io.Writer interface, for counting bytes being read/written in HTTP requests
 type BytesCounter struct {
-	start              time.Time
-	pos                int
-	total              int
-	payload            []byte
-	reader             io.ReadSeeker
-	mebi               bool
-	uploadSize         int
-	lastProgress       time.Time
-	progressIntervalMs int64
-	transferType       string
-	duration           int64
+	start      time.Time
+	pos        int
+	total      int
+	payload    []byte
+	reader     io.ReadSeeker
+	mebi       bool
+	uploadSize int
 
 	lock *sync.Mutex
 }
 
 func NewCounter() *BytesCounter {
 	return &BytesCounter{
-		progressIntervalMs: 100,
-		lock:               &sync.Mutex{},
+		lock: &sync.Mutex{},
 	}
 }
 
@@ -62,16 +57,6 @@ func (c *BytesCounter) Read(p []byte) (int, error) {
 // SetBase sets the base for dividing bytes into megabyte or mebibyte
 func (c *BytesCounter) SetMebi(mebi bool) {
 	c.mebi = mebi
-}
-
-// Sets the type of transfer (ping/download/upload)
-func (c *BytesCounter) SetTransferType(transferType string) {
-	c.transferType = transferType
-}
-
-// Set the duration of the test for progress tracking
-func (c *BytesCounter) SetDuration(duration int64) {
-	c.duration = duration
 }
 
 // SetUploadSize sets the size of payload being uploaded
@@ -129,7 +114,6 @@ func (c *BytesCounter) resetReader() (int64, error) {
 // Start will set the `start` field to current time
 func (c *BytesCounter) Start() {
 	c.start = time.Now()
-	c.lastProgress = c.start
 }
 
 // Total returns the total bytes read/written

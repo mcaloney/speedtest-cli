@@ -32,8 +32,9 @@ type Server struct {
 	SponsorName string `json:"sponsorName"`
 	SponsorURL  string `json:"sponsorURL"`
 
-	NoICMP bool         `json:"-"`
-	TLog   TelemetryLog `json:"-"`
+	NoICMP         bool         `json:"-"`
+	SuppressOutput bool         `json:"-"`
+	TLog           TelemetryLog `json:"-"`
 }
 
 // IsUp checks the speed test backend is up by accessing the ping URL
@@ -127,37 +128,27 @@ func (s *Server) ICMPPingAndJitter(count int, srcIp, network string) (float64, f
 	return float64(stats.AvgRtt.Milliseconds()), jitter, nil
 }
 
-// PingAndJitter pings the server via accessing ping URL and calculate the average ping and jitter
-func (s *Server) PingAndJitter(count int) (float64, float64, error) {
-	type JSONPingProgress struct {
-		Type      string    `json:"type"`
-		Timestamp time.Time `json:"timestamp"`
-		Ping      struct {
-			Jitter   float64 `json:"jitter"`
-			Latency  float64 `json:"latency"`
-			Progress float64 `json:"progress"`
-		} `json:"ping"`
-	}
-
-	getJitter := func(pings []float64) float64 {
-		var lastPing, jitter float64
-		for idx, p := range pings {
-			if idx != 0 {
-				instJitter := math.Abs(lastPing - p)
-				if idx > 1 {
-					if jitter > instJitter {
-						jitter = jitter*0.7 + instJitter*0.3
-					} else {
-						jitter = instJitter*0.2 + jitter*0.8
-					}
+func getJitter(pings []float64) float64 {
+	var lastPing, jitter float64
+	for idx, p := range pings {
+		if idx != 0 {
+			instJitter := math.Abs(lastPing - p)
+			if idx > 1 {
+				if jitter > instJitter {
+					jitter = jitter*0.7 + instJitter*0.3
+				} else {
+					jitter = instJitter*0.2 + jitter*0.8
 				}
 			}
-			lastPing = p
 		}
-
-		return jitter
+		lastPing = p
 	}
 
+	return jitter
+}
+
+// PingAndJitter pings the server via accessing ping URL and calculate the average ping and jitter
+func (s *Server) PingAndJitter(count int) (float64, float64, error) {
 	t := time.Now()
 	defer func() {
 		s.TLog.Logf("TCP ping took %s", time.Now().Sub(t).String())
@@ -192,19 +183,8 @@ func (s *Server) PingAndJitter(count int) (float64, float64, error) {
 
 		pings = append(pings, float64(end.Sub(start).Milliseconds()))
 
-		if i > 0 {
-			var progress JSONPingProgress
-			progress.Timestamp = end
-			progress.Type = "ping"
-			progress.Ping.Latency = pings[len(pings)-1]
-			progress.Ping.Jitter = getJitter(pings[1:])
-			progress.Ping.Progress = float64(i) / float64(count)
-
-			if b, err := json.Marshal(&progress); err != nil {
-				log.Errorf("Error generating progress update: %s", err)
-			} else {
-				log.Warnf("%s", b)
-			}
+		if i > 0 && !s.SuppressOutput {
+			sendPingProgress(pings[len(pings)-1], getJitter(pings[1:]), float64(i)/float64(count))
 		}
 	}
 
@@ -225,8 +205,6 @@ func (s *Server) Download(silent bool, useBytes, useMebi bool, requests int, chu
 
 	counter := NewCounter()
 	counter.SetMebi(useMebi)
-	counter.SetTransferType("download")
-	counter.SetDuration(duration.Milliseconds())
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -269,37 +247,10 @@ func (s *Server) Download(silent bool, useBytes, useMebi bool, requests int, chu
 	}
 
 	updateProgress := func() {
-		type JSONDownloadProgress struct {
-			Type      string    `json:"type"`
-			Timestamp time.Time `json:"timestamp"`
-			Download  struct {
-				Bandwidth int     `json:"bandwidth"`
-				Bytes     int     `json:"bytes"`
-				Elapsed   int64   `json:"elapsed"`
-				Progress  float64 `json:"progress"`
-			} `json:"download"`
-		}
-
-		var progress JSONDownloadProgress
-
 		for time.Since(counter.start).Milliseconds() < duration.Milliseconds() {
 			time.Sleep(100 * time.Millisecond)
 
-			progress.Timestamp = time.Now()
-			progress.Type = "download"
-			progress.Download.Bytes = counter.total
-			progress.Download.Elapsed = time.Since(counter.start).Milliseconds()
-			progress.Download.Bandwidth = int(float64(progress.Download.Bytes) / (float64(time.Since(counter.start).Milliseconds()) / 1000))
-			progress.Download.Progress = float64(progress.Download.Elapsed) / float64(counter.duration)
-			if progress.Download.Progress > 1 {
-				progress.Download.Progress = 1
-			}
-
-			if b, err := json.Marshal(&progress); err != nil {
-				log.Errorf("Error generating progress update: %s", err)
-			} else {
-				log.Warnf("%s", b)
-			}
+			sendDownloadProgress(counter, duration.Milliseconds())
 		}
 	}
 
@@ -359,8 +310,6 @@ func (s *Server) Upload(noPrealloc, silent, useBytes, useMebi bool, requests int
 	counter := NewCounter()
 	counter.SetMebi(useMebi)
 	counter.SetUploadSize(uploadSize)
-	counter.SetTransferType("upload")
-	counter.SetDuration(duration.Milliseconds())
 
 	if noPrealloc {
 		log.Info("Pre-allocation is disabled, performance might be lower!")
@@ -403,36 +352,10 @@ func (s *Server) Upload(noPrealloc, silent, useBytes, useMebi bool, requests int
 	}
 
 	updateProgress := func() {
-		type JSONUploadProgress struct {
-			Type      string    `json:"type"`
-			Timestamp time.Time `json:"timestamp"`
-			Upload    struct {
-				Bandwidth int     `json:"bandwidth"`
-				Bytes     int     `json:"bytes"`
-				Elapsed   int64   `json:"elapsed"`
-				Progress  float64 `json:"progress"`
-			} `json:"upload"`
-		}
-
-		var progress JSONUploadProgress
 		for time.Since(counter.start).Milliseconds() < duration.Milliseconds() {
 			time.Sleep(100 * time.Millisecond)
 
-			progress.Timestamp = time.Now()
-			progress.Type = "upload"
-			progress.Upload.Bytes = counter.total
-			progress.Upload.Elapsed = time.Since(counter.start).Milliseconds()
-			progress.Upload.Bandwidth = int(float64(progress.Upload.Bytes) / (float64(time.Since(counter.start).Milliseconds()) / 1000))
-			progress.Upload.Progress = float64(progress.Upload.Elapsed) / float64(counter.duration)
-			if progress.Upload.Progress > 1 {
-				progress.Upload.Progress = 1
-			}
-
-			if b, err := json.Marshal(&progress); err != nil {
-				log.Errorf("Error generating progress update: %s", err)
-			} else {
-				log.Warnf("%s", b)
-			}
+			sendUploadProgress(counter, duration.Milliseconds())
 		}
 	}
 

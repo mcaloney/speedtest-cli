@@ -328,6 +328,7 @@ func pingWorker(jobs <-chan PingJob, results chan<- PingResult, wg *sync.WaitGro
 		if server.IsUp() {
 			// skip ICMP if option given
 			server.NoICMP = noICMP
+			server.SuppressOutput = true
 
 			// if server is up, get ping
 			ping, _, err := server.ICMPPingAndJitter(1, srcIp, network)
