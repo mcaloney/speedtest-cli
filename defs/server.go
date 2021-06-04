@@ -184,7 +184,7 @@ func (s *Server) PingAndJitter(count int) (float64, float64, error) {
 		pings = append(pings, float64(end.Sub(start).Milliseconds()))
 
 		if i > 0 && s.IncrementalProgress {
-			sendPingProgress(pings[len(pings)-1], getJitter(pings[1:]), float64(i)/float64(count))
+			SendPingProgress(pings[len(pings)-1], getJitter(pings[1:]), float64(i)/float64(count))
 		}
 	}
 
@@ -250,7 +250,7 @@ func (s *Server) Download(silent bool, useBytes, useMebi bool, requests int, chu
 		for time.Since(counter.start).Milliseconds() < duration.Milliseconds() {
 			time.Sleep(100 * time.Millisecond)
 
-			sendDownloadProgress(counter, duration.Milliseconds())
+			SendDownloadProgress(counter, duration.Milliseconds())
 		}
 	}
 
@@ -355,7 +355,7 @@ func (s *Server) Upload(noPrealloc, silent, useBytes, useMebi bool, requests int
 		for time.Since(counter.start).Milliseconds() < duration.Milliseconds() {
 			time.Sleep(100 * time.Millisecond)
 
-			sendUploadProgress(counter, duration.Milliseconds())
+			SendUploadProgress(counter, duration.Milliseconds())
 		}
 	}
 

@@ -7,7 +7,33 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-type JSONPingProgress struct {
+type JSONProgressInterfaceInfo struct {
+	Name       string `json:"name"`
+	MacAddr    string `json:"macAddr"`
+	IsVpn      bool   `json:"isVpn"`
+	ExternalIP string `json:"externalIp"`
+	InternalIP string `json:"internalIp"`
+}
+
+type JSONProgressServerInfo struct {
+	Name     string `json:"name"`
+	Country  string `json:"country"`
+	Host     string `json:"host"`
+	Location string `json:"location"`
+	ID       int    `json:"id"`
+	IP       string `json:"ip"`
+	Port     string `json:"port"`
+}
+
+type JSONProgressHeader struct {
+	Type      string                    `json:"type"`
+	Timestamp time.Time                 `json:"timestamp"`
+	ISP       string                    `json:"isp"`
+	Server    JSONProgressServerInfo    `json:"server"`
+	Interface JSONProgressInterfaceInfo `json:"interface"`
+}
+
+type JSONProgressPing struct {
 	Type      string    `json:"type"`
 	Timestamp time.Time `json:"timestamp"`
 	Ping      struct {
@@ -17,7 +43,7 @@ type JSONPingProgress struct {
 	} `json:"ping"`
 }
 
-type JSONDownloadProgress struct {
+type JSONProgressDownload struct {
 	Type      string    `json:"type"`
 	Timestamp time.Time `json:"timestamp"`
 	Download  struct {
@@ -28,7 +54,7 @@ type JSONDownloadProgress struct {
 	} `json:"download"`
 }
 
-type JSONUploadProgress struct {
+type JSONProgressUpload struct {
 	Type      string    `json:"type"`
 	Timestamp time.Time `json:"timestamp"`
 	Upload    struct {
@@ -39,8 +65,35 @@ type JSONUploadProgress struct {
 	} `json:"upload"`
 }
 
-func sendPingProgress(latency float64, jitter float64, progress float64) {
-	var pingProgress JSONPingProgress
+func SendProgressHeader(s *Server, isp *IPInfoResponse) {
+	var header JSONProgressHeader
+	header.Timestamp = time.Now()
+	header.Type = "testStart"
+	header.ISP = isp.Organization
+	header.Interface.ExternalIP = isp.IP
+	header.Interface.InternalIP = "n/a"
+	header.Interface.IsVpn = false
+	header.Interface.MacAddr = "n/a"
+	header.Interface.Name = "n/a"
+
+	serverUrl, _ := s.GetURL()
+	header.Server.Name = s.Name
+	header.Server.ID = s.ID
+	header.Server.Host = serverUrl.Hostname()
+	header.Server.Port = serverUrl.Port()
+	header.Server.IP = serverUrl.Hostname()
+	header.Server.Country = "n/a"
+	header.Server.Location = "n/a"
+
+	if b, err := json.Marshal(&header); err != nil {
+		log.Errorf("Error generating progress update: %s", err)
+	} else {
+		log.Warnf("%s", b)
+	}
+}
+
+func SendPingProgress(latency float64, jitter float64, progress float64) {
+	var pingProgress JSONProgressPing
 	pingProgress.Timestamp = time.Now()
 	pingProgress.Type = "ping"
 	pingProgress.Ping.Latency = latency
@@ -54,8 +107,8 @@ func sendPingProgress(latency float64, jitter float64, progress float64) {
 	}
 }
 
-func sendDownloadProgress(c *BytesCounter, durationMs int64) {
-	var progress JSONDownloadProgress
+func SendDownloadProgress(c *BytesCounter, durationMs int64) {
+	var progress JSONProgressDownload
 
 	progress.Timestamp = time.Now()
 	progress.Type = "download"
@@ -75,8 +128,8 @@ func sendDownloadProgress(c *BytesCounter, durationMs int64) {
 }
 
 // TODO: set durationMs once instead of with every progress update since it's constant
-func sendUploadProgress(c *BytesCounter, durationMs int64) {
-	var progress JSONUploadProgress
+func SendUploadProgress(c *BytesCounter, durationMs int64) {
+	var progress JSONProgressUpload
 
 	progress.Timestamp = time.Now()
 	progress.Type = "upload"

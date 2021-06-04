@@ -72,6 +72,11 @@ func doSpeedTest(c *cli.Context, servers []defs.Server, telemetryServer defs.Tel
 			currentServer.NoICMP = c.Bool(defs.OptionNoICMP)
 			currentServer.IncrementalProgress = c.Bool(defs.OptionJSONL)
 
+			// send header info if running in JSONL mode
+			if c.Bool(defs.OptionJSONL) {
+				defs.SendProgressHeader(&currentServer, &ispInfo.RawISPInfo)
+			}
+
 			p, jitter, err := currentServer.ICMPPingAndJitter(pingCount, c.String(defs.OptionSource), network)
 			if err != nil {
 				log.Errorf("Failed to get ping and jitter: %s", err)
