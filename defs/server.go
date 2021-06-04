@@ -32,8 +32,9 @@ type Server struct {
 	SponsorName string `json:"sponsorName"`
 	SponsorURL  string `json:"sponsorURL"`
 
-	NoICMP bool         `json:"-"`
-	TLog   TelemetryLog `json:"-"`
+	NoICMP              bool         `json:"-"`
+	IncrementalProgress bool         `json:"-"`
+	TLog                TelemetryLog `json:"-"`
 }
 
 // IsUp checks the speed test backend is up by accessing the ping URL
@@ -127,6 +128,25 @@ func (s *Server) ICMPPingAndJitter(count int, srcIp, network string) (float64, f
 	return float64(stats.AvgRtt.Milliseconds()), jitter, nil
 }
 
+func getJitter(pings []float64) float64 {
+	var lastPing, jitter float64
+	for idx, p := range pings {
+		if idx != 0 {
+			instJitter := math.Abs(lastPing - p)
+			if idx > 1 {
+				if jitter > instJitter {
+					jitter = jitter*0.7 + instJitter*0.3
+				} else {
+					jitter = instJitter*0.2 + jitter*0.8
+				}
+			}
+		}
+		lastPing = p
+	}
+
+	return jitter
+}
+
 // PingAndJitter pings the server via accessing ping URL and calculate the average ping and jitter
 func (s *Server) PingAndJitter(count int) (float64, float64, error) {
 	t := time.Now()
@@ -162,6 +182,10 @@ func (s *Server) PingAndJitter(count int) (float64, float64, error) {
 		end := time.Now()
 
 		pings = append(pings, float64(end.Sub(start).Milliseconds()))
+
+		if i > 0 && s.IncrementalProgress {
+			SendPingProgress(pings[len(pings)-1], getJitter(pings[1:]), float64(i)/float64(count))
+		}
 	}
 
 	// discard first result due to handshake overhead
@@ -169,22 +193,7 @@ func (s *Server) PingAndJitter(count int) (float64, float64, error) {
 		pings = pings[1:]
 	}
 
-	var lastPing, jitter float64
-	for idx, p := range pings {
-		if idx != 0 {
-			instJitter := math.Abs(lastPing - p)
-			if idx > 1 {
-				if jitter > instJitter {
-					jitter = jitter*0.7 + instJitter*0.3
-				} else {
-					jitter = instJitter*0.2 + jitter*0.8
-				}
-			}
-		}
-		lastPing = p
-	}
-
-	return getAvg(pings), jitter, nil
+	return getAvg(pings), getJitter(pings), nil
 }
 
 // Download performs the actual download test
@@ -237,6 +246,14 @@ func (s *Server) Download(silent bool, useBytes, useMebi bool, requests int, chu
 		}
 	}
 
+	updateProgress := func() {
+		for time.Since(counter.start).Milliseconds() < duration.Milliseconds() {
+			time.Sleep(100 * time.Millisecond)
+
+			SendDownloadProgress(counter, duration.Milliseconds())
+		}
+	}
+
 	counter.Start()
 	if !silent {
 		pb := spinner.New(spinner.CharSets[11], 100*time.Millisecond)
@@ -258,6 +275,10 @@ func (s *Server) Download(silent bool, useBytes, useMebi bool, requests int, chu
 			}
 			pb.Stop()
 		}()
+	}
+
+	if s.IncrementalProgress {
+		go updateProgress()
 	}
 
 	for i := 0; i < requests; i++ {
@@ -330,6 +351,14 @@ func (s *Server) Upload(noPrealloc, silent, useBytes, useMebi bool, requests int
 		}
 	}
 
+	updateProgress := func() {
+		for time.Since(counter.start).Milliseconds() < duration.Milliseconds() {
+			time.Sleep(100 * time.Millisecond)
+
+			SendUploadProgress(counter, duration.Milliseconds())
+		}
+	}
+
 	counter.Start()
 	if !silent {
 		pb := spinner.New(spinner.CharSets[11], 100*time.Millisecond)
@@ -351,6 +380,10 @@ func (s *Server) Upload(noPrealloc, silent, useBytes, useMebi bool, requests int
 			}
 			pb.Stop()
 		}()
+	}
+
+	if s.IncrementalProgress {
+		go updateProgress()
 	}
 
 	for i := 0; i < requests; i++ {

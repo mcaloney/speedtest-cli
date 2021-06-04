@@ -70,6 +70,12 @@ func doSpeedTest(c *cli.Context, servers []defs.Server, telemetryServer defs.Tel
 
 			// skip ICMP if option given
 			currentServer.NoICMP = c.Bool(defs.OptionNoICMP)
+			currentServer.IncrementalProgress = c.Bool(defs.OptionJSONL)
+
+			// send header info if running in JSONL mode
+			if c.Bool(defs.OptionJSONL) {
+				defs.SendProgressHeader(&currentServer, &ispInfo.RawISPInfo)
+			}
 
 			p, jitter, err := currentServer.ICMPPingAndJitter(pingCount, c.String(defs.OptionSource), network)
 			if err != nil {
@@ -134,7 +140,7 @@ func doSpeedTest(c *cli.Context, servers []defs.Server, telemetryServer defs.Tel
 				} else {
 					shareLink = link
 					// only print to stdout when --json and --csv are not used
-					if !c.Bool(defs.OptionJSON) && !c.Bool(defs.OptionCSV) {
+					if !c.Bool(defs.OptionJSON) && !c.Bool(defs.OptionJSONL) && !c.Bool(defs.OptionCSV) {
 						log.Warnf("Share your result: %s", link)
 					}
 				}
@@ -156,7 +162,7 @@ func doSpeedTest(c *cli.Context, servers []defs.Server, telemetryServer defs.Tel
 				rep.IP = ispInfo.RawISPInfo.IP
 
 				reps_csv = append(reps_csv, rep)
-			} else if c.Bool(defs.OptionJSON) {
+			} else if c.Bool(defs.OptionJSON) || c.Bool(defs.OptionJSONL) {
 				// print json if --json is given
 				var rep report.JSONReport
 				rep.Timestamp = time.Now()
@@ -174,15 +180,15 @@ func doSpeedTest(c *cli.Context, servers []defs.Server, telemetryServer defs.Tel
 
 				rep.Client = report.Client{ispInfo.RawISPInfo}
 				rep.Client.Readme = ""
-				
-				reps_json = append(reps_json,rep)
+
+				reps_json = append(reps_json, rep)
 			}
 		} else {
 			log.Infof("Selected server %s (%s) is not responding at the moment, try again later", currentServer.Name, u.Hostname())
 		}
 
 		//add a new line after each test if testing multiple servers
-		if ( len(servers) > 1 &&  !silent){
+		if len(servers) > 1 && !silent {
 			log.Warn()
 		}
 	}
@@ -195,7 +201,7 @@ func doSpeedTest(c *cli.Context, servers []defs.Server, telemetryServer defs.Tel
 		} else {
 			log.Warn(buf.String())
 		}
-	} else if c.Bool(defs.OptionJSON) {
+	} else if c.Bool(defs.OptionJSON) || c.Bool(defs.OptionJSONL) {
 		if b, err := json.Marshal(&reps_json); err != nil {
 			log.Errorf("Error generating JSON report: %s", err)
 		} else {
