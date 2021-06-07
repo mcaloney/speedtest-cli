@@ -31,6 +31,8 @@ type Server struct {
 	GetIPURL    string `json:"getIpURL"`
 	SponsorName string `json:"sponsorName"`
 	SponsorURL  string `json:"sponsorURL"`
+	Location    string `json:"location"`
+	Country     string `json:"country"`
 
 	NoICMP              bool         `json:"-"`
 	IncrementalProgress bool         `json:"-"`

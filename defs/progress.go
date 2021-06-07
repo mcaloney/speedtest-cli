@@ -119,8 +119,8 @@ func SendProgressHeader(s *Server, isp *IPInfoResponse) {
 	header.Server.Host = serverUrl.Hostname()
 	header.Server.Port = serverUrl.Port()
 	header.Server.IP = serverUrl.Hostname()
-	header.Server.Country = "n/a"
-	header.Server.Location = "n/a"
+	header.Server.Country = s.Country
+	header.Server.Location = s.Location
 
 	if b, err := json.Marshal(&header); err != nil {
 		log.Errorf("Error generating progress update: %s", err)
