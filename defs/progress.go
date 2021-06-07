@@ -2,6 +2,7 @@ package defs
 
 import (
 	"encoding/json"
+	"net"
 	"time"
 
 	log "github.com/sirupsen/logrus"
@@ -66,15 +67,51 @@ type JSONProgressUpload struct {
 }
 
 func SendProgressHeader(s *Server, isp *IPInfoResponse) {
+	getWanInterface := func() net.Interface {
+		var result net.Interface
+
+		ifs, _ := net.Interfaces()
+		for i := 0; i < len(ifs); i++ {
+			if ifs[i].Name == "eth0" {
+				result = ifs[i]
+				break
+			} else if ifs[i].Flags&net.FlagUp != 0 && ifs[i].Flags&net.FlagLoopback == 0 {
+				ips, _ := ifs[i].Addrs()
+				if len(ips) > 1 {
+					result = ifs[i]
+					break
+				}
+			}
+		}
+
+		return result
+	}
+
+	getIPFromInterface := func(iface *net.Interface) string {
+		// find the wan IP address
+		var ipAddr net.IP
+		if addrs, err := iface.Addrs(); err == nil {
+			for _, addr := range addrs {
+				if ipAddr = addr.(*net.IPNet).IP.To4(); ipAddr != nil {
+					return ipAddr.String()
+				}
+			}
+		}
+
+		return "n/a"
+	}
+
 	var header JSONProgressHeader
+	wanInterface := getWanInterface()
+
 	header.Timestamp = time.Now()
 	header.Type = "testStart"
 	header.ISP = isp.Organization
 	header.Interface.ExternalIP = isp.IP
-	header.Interface.InternalIP = "n/a"
+	header.Interface.InternalIP = getIPFromInterface(&wanInterface)
 	header.Interface.IsVpn = false
-	header.Interface.MacAddr = "n/a"
-	header.Interface.Name = "n/a"
+	header.Interface.MacAddr = wanInterface.HardwareAddr.String()
+	header.Interface.Name = wanInterface.Name
 
 	serverUrl, _ := s.GetURL()
 	header.Server.Name = s.Name
