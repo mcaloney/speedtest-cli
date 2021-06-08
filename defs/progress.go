@@ -1,8 +1,12 @@
 package defs
 
 import (
+	"bufio"
 	"encoding/json"
 	"net"
+	"os"
+	"strconv"
+	"strings"
 	"time"
 
 	log "github.com/sirupsen/logrus"
@@ -66,6 +70,96 @@ type JSONProgressUpload struct {
 	} `json:"upload"`
 }
 
+type InterfaceStats struct {
+	RxBytes      int64 `json:"rxbytes"`
+	TxBytes      int64 `json:"txbytes"`
+	RxPackets    int64 `json:"rxpackets"`
+	TxPackets    int64 `json:"txpackets"`
+	RxErrors     int64 `json:"rxerrors"`
+	TxErrors     int64 `json:"txerrors"`
+	RxDropped    int64 `json:"rxdropped"`
+	TxDropped    int64 `json:"txdropped"`
+	RxFifo       int64 `json:"rxfifo"`
+	TxFifo       int64 `json:"txfifo"`
+	RxFrame      int64 `json:"rxframe"`
+	TxFrame      int64 `json:"txframe"`
+	RxCompressed int64 `json:"rxcompressed"`
+	TxCompressed int64 `json:"txcompressed"`
+	RxMulticast  int64 `json:"rxmulticast"`
+	TxMulticast  int64 `json:"txmulticast"`
+}
+
+func getInterfaceStats(i *net.Interface) InterfaceStats {
+	var result InterfaceStats
+	filename := "/Users/chris/src/cpec/speedtest-cli/ifstat.txt"
+
+	file, err := os.Open(filename)
+	if err != nil {
+		log.Errorf("error: Failed to open %s (%s)", filename, err)
+	}
+
+	defer file.Close()
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if strings.HasPrefix(line, "eth0:") {
+			fields := strings.Fields(line)
+			rxfields := fields[1:9]
+			if i, err := strconv.ParseInt(rxfields[0], 10, 64); err == nil {
+				result.RxBytes = (i)
+			}
+			if i, err := strconv.ParseInt(rxfields[1], 10, 64); err == nil {
+				result.RxPackets = (i)
+			}
+			if i, err := strconv.ParseInt(rxfields[2], 10, 64); err == nil {
+				result.RxErrors = (i)
+			}
+			if i, err := strconv.ParseInt(rxfields[3], 10, 64); err == nil {
+				result.RxDropped = (i)
+			}
+			if i, err := strconv.ParseInt(rxfields[4], 10, 64); err == nil {
+				result.RxFifo = (i)
+			}
+			if i, err := strconv.ParseInt(rxfields[5], 10, 64); err == nil {
+				result.RxFrame = (i)
+			}
+			if i, err := strconv.ParseInt(rxfields[6], 10, 64); err == nil {
+				result.RxCompressed = (i)
+			}
+			if i, err := strconv.ParseInt(rxfields[7], 10, 64); err == nil {
+				result.RxMulticast = (i)
+			}
+			txfields := fields[9:]
+			if i, err := strconv.ParseInt(txfields[0], 10, 64); err == nil {
+				result.TxBytes = (i)
+			}
+			if i, err := strconv.ParseInt(txfields[1], 10, 64); err == nil {
+				result.TxPackets = (i)
+			}
+			if i, err := strconv.ParseInt(txfields[2], 10, 64); err == nil {
+				result.TxErrors = (i)
+			}
+			if i, err := strconv.ParseInt(txfields[3], 10, 64); err == nil {
+				result.TxDropped = (i)
+			}
+			if i, err := strconv.ParseInt(txfields[4], 10, 64); err == nil {
+				result.TxFifo = (i)
+			}
+			if i, err := strconv.ParseInt(txfields[5], 10, 64); err == nil {
+				result.TxFrame = (i)
+			}
+			if i, err := strconv.ParseInt(txfields[6], 10, 64); err == nil {
+				result.TxCompressed = (i)
+			}
+			if i, err := strconv.ParseInt(txfields[7], 10, 64); err == nil {
+				result.TxMulticast = (i)
+			}
+		}
+	}
+
+	return result
+}
+
 func SendProgressHeader(s *Server, isp *IPInfoResponse) {
 	getWanInterface := func() net.Interface {
 		var result net.Interface
@@ -103,6 +197,12 @@ func SendProgressHeader(s *Server, isp *IPInfoResponse) {
 
 	var header JSONProgressHeader
 	wanInterface := getWanInterface()
+	stats := getInterfaceStats(&wanInterface)
+	if b, err := json.Marshal(&stats); err != nil {
+		log.Errorf("Error serializing interface stats: %s", err)
+	} else {
+		log.Warnf("%s", b)
+	}
 
 	header.Timestamp = time.Now()
 	header.Type = "testStart"
