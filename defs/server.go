@@ -199,7 +199,7 @@ func (s *Server) PingAndJitter(count int) (float64, float64, error) {
 }
 
 // Download performs the actual download test
-func (s *Server) Download(silent bool, useBytes, useMebi bool, requests int, chunks int, duration time.Duration) (float64, int, error) {
+func (s *Server) Download(silent bool, useBytes, useMebi bool, requests int, chunks int, duration time.Duration) (float64, int, int, error) {
 	t := time.Now()
 	defer func() {
 		s.TLog.Logf("Download took %s", time.Now().Sub(t).String())
@@ -214,14 +214,18 @@ func (s *Server) Download(silent bool, useBytes, useMebi bool, requests int, chu
 	u, err := s.GetURL()
 	if err != nil {
 		log.Debugf("Failed to get server URL: %s", err)
-		return 0, 0, err
+		return 0, 0, 0, err
 	}
+
+	// track the interface stats before starting the download
+	wanInterface := GetWanInterface()
+	statsBefore := getInterfaceStats(&wanInterface)
 
 	u.Path = path.Join(u.Path, s.DownloadURL)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
 	if err != nil {
 		log.Debugf("Failed when creating HTTP request: %s", err)
-		return 0, 0, err
+		return 0, 0, 0, err
 	}
 	q := req.URL.Query()
 	q.Set("ckSize", strconv.Itoa(chunks))
@@ -299,11 +303,14 @@ Loop:
 		}
 	}
 
-	return counter.AvgMbps(), counter.Total(), nil
+	// get the final interface stats for the download
+	statsAfter := getInterfaceStats(&wanInterface)
+
+	return counter.AvgMbps(), counter.Total(), int(statsAfter.RxPackets - statsBefore.RxPackets), nil
 }
 
 // Upload performs the actual upload test
-func (s *Server) Upload(noPrealloc, silent, useBytes, useMebi bool, requests int, uploadSize int, duration time.Duration) (float64, int, error) {
+func (s *Server) Upload(noPrealloc, silent, useBytes, useMebi bool, requests int, uploadSize int, duration time.Duration) (float64, int, int, error) {
 	t := time.Now()
 	defer func() {
 		s.TLog.Logf("Upload took %s", time.Now().Sub(t).String())
@@ -323,8 +330,12 @@ func (s *Server) Upload(noPrealloc, silent, useBytes, useMebi bool, requests int
 	u, err := s.GetURL()
 	if err != nil {
 		log.Debugf("Failed to get server URL: %s", err)
-		return 0, 0, err
+		return 0, 0, 0, err
 	}
+
+	// track the interface stats before starting the download
+	wanInterface := GetWanInterface()
+	statsBefore := getInterfaceStats(&wanInterface)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -332,7 +343,7 @@ func (s *Server) Upload(noPrealloc, silent, useBytes, useMebi bool, requests int
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, u.String(), counter)
 	if err != nil {
 		log.Debugf("Failed when creating HTTP request: %s", err)
-		return 0, 0, err
+		return 0, 0, 0, err
 	}
 	req.Header.Set("User-Agent", UserAgent)
 	req.Header.Set("Accept-Encoding", "identity")
@@ -404,7 +415,10 @@ Loop:
 		}
 	}
 
-	return counter.AvgMbps(), counter.Total(), nil
+	// get the final interface stats for the download
+	statsAfter := getInterfaceStats(&wanInterface)
+
+	return counter.AvgMbps(), counter.Total(), int(statsAfter.TxPackets - statsBefore.TxPackets), nil
 }
 
 // GetIPInfo accesses the backend's getIP.php endpoint and get current client's IP information

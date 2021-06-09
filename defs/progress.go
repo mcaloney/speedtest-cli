@@ -91,7 +91,7 @@ type InterfaceStats struct {
 
 func getInterfaceStats(i *net.Interface) InterfaceStats {
 	var result InterfaceStats
-	filename := "/Users/chris/src/cpec/speedtest-cli/ifstat.txt"
+	filename := "/proc/net/dev"
 
 	file, err := os.Open(filename)
 	if err != nil {
@@ -99,10 +99,11 @@ func getInterfaceStats(i *net.Interface) InterfaceStats {
 	}
 
 	defer file.Close()
+
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
-		if strings.HasPrefix(line, "eth0:") {
+		if strings.HasPrefix(line, i.Name+":") {
 			fields := strings.Fields(line)
 			rxfields := fields[1:9]
 			if i, err := strconv.ParseInt(rxfields[0], 10, 64); err == nil {
@@ -154,6 +155,28 @@ func getInterfaceStats(i *net.Interface) InterfaceStats {
 			if i, err := strconv.ParseInt(txfields[7], 10, 64); err == nil {
 				result.TxMulticast = (i)
 			}
+
+			break
+		}
+	}
+
+	return result
+}
+
+func GetWanInterface() net.Interface {
+	var result net.Interface
+
+	ifs, _ := net.Interfaces()
+	for i := 0; i < len(ifs); i++ {
+		if ifs[i].Name == "eth0" {
+			result = ifs[i]
+			break
+		} else if ifs[i].Flags&net.FlagUp != 0 && ifs[i].Flags&net.FlagLoopback == 0 {
+			ips, _ := ifs[i].Addrs()
+			if len(ips) > 1 {
+				result = ifs[i]
+				break
+			}
 		}
 	}
 
@@ -161,26 +184,6 @@ func getInterfaceStats(i *net.Interface) InterfaceStats {
 }
 
 func SendProgressHeader(s *Server, isp *IPInfoResponse) {
-	getWanInterface := func() net.Interface {
-		var result net.Interface
-
-		ifs, _ := net.Interfaces()
-		for i := 0; i < len(ifs); i++ {
-			if ifs[i].Name == "eth0" {
-				result = ifs[i]
-				break
-			} else if ifs[i].Flags&net.FlagUp != 0 && ifs[i].Flags&net.FlagLoopback == 0 {
-				ips, _ := ifs[i].Addrs()
-				if len(ips) > 1 {
-					result = ifs[i]
-					break
-				}
-			}
-		}
-
-		return result
-	}
-
 	getIPFromInterface := func(iface *net.Interface) string {
 		// find the wan IP address
 		var ipAddr net.IP
@@ -196,13 +199,7 @@ func SendProgressHeader(s *Server, isp *IPInfoResponse) {
 	}
 
 	var header JSONProgressHeader
-	wanInterface := getWanInterface()
-	stats := getInterfaceStats(&wanInterface)
-	if b, err := json.Marshal(&stats); err != nil {
-		log.Errorf("Error serializing interface stats: %s", err)
-	} else {
-		log.Warnf("%s", b)
-	}
+	wanInterface := GetWanInterface()
 
 	header.Timestamp = time.Now()
 	header.Type = "testStart"

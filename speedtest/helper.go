@@ -91,31 +91,35 @@ func doSpeedTest(c *cli.Context, servers []defs.Server, telemetryServer defs.Tel
 			// get download value
 			var downloadValue float64
 			var bytesRead int
+			var packetsReceived int
 			if c.Bool(defs.OptionNoDownload) {
 				log.Info("Download test is disabled")
 			} else {
-				download, br, err := currentServer.Download(silent, c.Bool(defs.OptionBytes), c.Bool(defs.OptionMebiBytes), c.Int(defs.OptionConcurrent), c.Int(defs.OptionChunks), time.Duration(c.Int(defs.OptionDuration))*time.Second)
+				download, br, rxpackets, err := currentServer.Download(silent, c.Bool(defs.OptionBytes), c.Bool(defs.OptionMebiBytes), c.Int(defs.OptionConcurrent), c.Int(defs.OptionChunks), time.Duration(c.Int(defs.OptionDuration))*time.Second)
 				if err != nil {
 					log.Errorf("Failed to get download speed: %s", err)
 					return err
 				}
 				downloadValue = download
 				bytesRead = br
+				packetsReceived = rxpackets
 			}
 
 			// get upload value
 			var uploadValue float64
 			var bytesWritten int
+			var packetsSent int
 			if c.Bool(defs.OptionNoUpload) {
 				log.Info("Upload test is disabled")
 			} else {
-				upload, bw, err := currentServer.Upload(c.Bool(defs.OptionNoPreAllocate), silent, c.Bool(defs.OptionBytes), c.Bool(defs.OptionMebiBytes), c.Int(defs.OptionConcurrent), c.Int(defs.OptionUploadSize), time.Duration(c.Int(defs.OptionDuration))*time.Second)
+				upload, bw, txpackets, err := currentServer.Upload(c.Bool(defs.OptionNoPreAllocate), silent, c.Bool(defs.OptionBytes), c.Bool(defs.OptionMebiBytes), c.Int(defs.OptionConcurrent), c.Int(defs.OptionUploadSize), time.Duration(c.Int(defs.OptionDuration))*time.Second)
 				if err != nil {
 					log.Errorf("Failed to get upload speed: %s", err)
 					return err
 				}
 				uploadValue = upload
 				bytesWritten = bw
+				packetsSent = txpackets
 			}
 
 			// print result if --simple is given
@@ -172,7 +176,9 @@ func doSpeedTest(c *cli.Context, servers []defs.Server, telemetryServer defs.Tel
 				rep.Download = math.Round(downloadValue*100) / 100
 				rep.Upload = math.Round(uploadValue*100) / 100
 				rep.BytesReceived = bytesRead
+				rep.PacketsReceived = packetsReceived
 				rep.BytesSent = bytesWritten
+				rep.PacketsSent = packetsSent
 				rep.Share = shareLink
 
 				rep.Server.Name = currentServer.Name
