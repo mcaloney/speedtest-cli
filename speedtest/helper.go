@@ -171,6 +171,8 @@ func doSpeedTest(c *cli.Context, servers []defs.Server, telemetryServer defs.Tel
 
 				rep.Server.Name = currentServer.Name
 				rep.Server.URL = u.String()
+				rep.Server.Location = currentServer.Location
+				rep.Server.Country = currentServer.Country
 
 				rep.Client = report.Client{ispInfo.RawISPInfo}
 				rep.Client.Readme = ""

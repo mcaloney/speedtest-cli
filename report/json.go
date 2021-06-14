@@ -20,8 +20,10 @@ type JSONReport struct {
 
 // Server represents the speed test server's information
 type Server struct {
-	Name string `json:"name"`
-	URL  string `json:"url"`
+	Name     string `json:"name"`
+	URL      string `json:"url"`
+	Location string `json:"location"`
+	Country  string `json:"country"`
 }
 
 // Client represents the speed test client's information
