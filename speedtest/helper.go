@@ -89,46 +89,38 @@ func doSpeedTest(c *cli.Context, servers []defs.Server, telemetryServer defs.Tel
 			}
 
 			// get download value
-			var downloadValue float64
-			var bytesRead int
-			var packetsReceived int
+			var downloadResult defs.TransferSummaryResponse
 			if c.Bool(defs.OptionNoDownload) {
 				log.Info("Download test is disabled")
 			} else {
-				download, br, rxpackets, err := currentServer.Download(silent, c.Bool(defs.OptionBytes), c.Bool(defs.OptionMebiBytes), c.Int(defs.OptionConcurrent), c.Int(defs.OptionChunks), time.Duration(c.Int(defs.OptionDuration))*time.Second)
+				result, err := currentServer.Download(silent, c.Bool(defs.OptionBytes), c.Bool(defs.OptionMebiBytes), c.Int(defs.OptionConcurrent), c.Int(defs.OptionChunks), time.Duration(c.Int(defs.OptionDuration))*time.Second)
 				if err != nil {
 					log.Errorf("Failed to get download speed: %s", err)
 					return err
 				}
-				downloadValue = download
-				bytesRead = br
-				packetsReceived = rxpackets
+				downloadResult = result
 			}
 
 			// get upload value
-			var uploadValue float64
-			var bytesWritten int
-			var packetsSent int
+			var uploadResult defs.TransferSummaryResponse
 			if c.Bool(defs.OptionNoUpload) {
 				log.Info("Upload test is disabled")
 			} else {
-				upload, bw, txpackets, err := currentServer.Upload(c.Bool(defs.OptionNoPreAllocate), silent, c.Bool(defs.OptionBytes), c.Bool(defs.OptionMebiBytes), c.Int(defs.OptionConcurrent), c.Int(defs.OptionUploadSize), time.Duration(c.Int(defs.OptionDuration))*time.Second)
+				result, err := currentServer.Upload(c.Bool(defs.OptionNoPreAllocate), silent, c.Bool(defs.OptionBytes), c.Bool(defs.OptionMebiBytes), c.Int(defs.OptionConcurrent), c.Int(defs.OptionUploadSize), time.Duration(c.Int(defs.OptionDuration))*time.Second)
 				if err != nil {
 					log.Errorf("Failed to get upload speed: %s", err)
 					return err
 				}
-				uploadValue = upload
-				bytesWritten = bw
-				packetsSent = txpackets
+				uploadResult = result
 			}
 
 			// print result if --simple is given
 			if c.Bool(defs.OptionSimple) {
 				if c.Bool(defs.OptionBytes) {
 					useMebi := c.Bool(defs.OptionMebiBytes)
-					log.Warnf("Ping:\t%.0f ms\tJitter:\t%.0f ms\nDownload rate:\t%s\nUpload rate:\t%s", p, jitter, humanizeMbps(downloadValue, useMebi), humanizeMbps(uploadValue, useMebi))
+					log.Warnf("Ping:\t%.0f ms\tJitter:\t%.0f ms\nDownload rate:\t%s\nUpload rate:\t%s", p, jitter, humanizeMbps(downloadResult.Bitrate, useMebi), humanizeMbps(uploadResult.Bitrate, useMebi))
 				} else {
-					log.Warnf("Ping:\t%.0f ms\tJitter:\t%.0f ms\nDownload rate:\t%.2f Mbps\nUpload rate:\t%.2f Mbps", p, jitter, downloadValue, uploadValue)
+					log.Warnf("Ping:\t%.0f ms\tJitter:\t%.0f ms\nDownload rate:\t%.2f Mbps\nUpload rate:\t%.2f Mbps", p, jitter, downloadResult.Bitrate, uploadResult.Bitrate)
 				}
 			}
 
@@ -139,7 +131,7 @@ func doSpeedTest(c *cli.Context, servers []defs.Server, telemetryServer defs.Tel
 				extra.ServerName = currentServer.Name
 				extra.Extra = c.String(defs.OptionTelemetryExtra)
 
-				if link, err := sendTelemetry(telemetryServer, ispInfo, downloadValue, uploadValue, p, jitter, currentServer.TLog.String(), extra); err != nil {
+				if link, err := sendTelemetry(telemetryServer, ispInfo, downloadResult.Bitrate, uploadResult.Bitrate, p, jitter, currentServer.TLog.String(), extra); err != nil {
 					log.Errorf("Error when sending telemetry data: %s", err)
 				} else {
 					shareLink = link
@@ -160,8 +152,8 @@ func doSpeedTest(c *cli.Context, servers []defs.Server, telemetryServer defs.Tel
 				rep.Address = u.String()
 				rep.Ping = p
 				rep.Jitter = math.Round(jitter*100) / 100
-				rep.Download = math.Round(downloadValue*100) / 100
-				rep.Upload = math.Round(uploadValue*100) / 100
+				rep.Download = math.Round(downloadResult.Bitrate*100) / 100
+				rep.Upload = math.Round(uploadResult.Bitrate*100) / 100
 				rep.Share = shareLink
 				rep.IP = ispInfo.RawISPInfo.IP
 
@@ -173,12 +165,8 @@ func doSpeedTest(c *cli.Context, servers []defs.Server, telemetryServer defs.Tel
 
 				rep.Ping = p
 				rep.Jitter = math.Round(jitter*100) / 100
-				rep.Download = math.Round(downloadValue*100) / 100
-				rep.Upload = math.Round(uploadValue*100) / 100
-				rep.BytesReceived = bytesRead
-				rep.PacketsReceived = packetsReceived
-				rep.BytesSent = bytesWritten
-				rep.PacketsSent = packetsSent
+				rep.Download = downloadResult
+				rep.Upload = uploadResult
 				rep.Share = shareLink
 
 				rep.Server.Name = currentServer.Name

@@ -27,3 +27,10 @@ type IPInfoResponse struct {
 	Timezone     string `json:"timezone"`
 	Readme       string `json:"readme,omitempty"`
 }
+
+type TransferSummaryResponse struct {
+	Bitrate      float64 `json:"bitrate"`
+	TotalBytes   int     `json:"total_bytes"`
+	TotalPackets int     `json:"total_packets"`
+	Elapsed      int64   `json:"elapsed"`
+}

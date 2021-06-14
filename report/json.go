@@ -8,18 +8,14 @@ import (
 
 // JSONReport represents the output data fields in a JSON file
 type JSONReport struct {
-	Timestamp       time.Time `json:"timestamp"`
-	Server          Server    `json:"server"`
-	Client          Client    `json:"client"`
-	BytesSent       int       `json:"bytes_sent"`
-	PacketsSent     int       `json:"packets_sent"`
-	BytesReceived   int       `json:"bytes_received"`
-	PacketsReceived int       `json:"packets_received"`
-	Ping            float64   `json:"ping"`
-	Jitter          float64   `json:"jitter"`
-	Upload          float64   `json:"upload"`
-	Download        float64   `json:"download"`
-	Share           string    `json:"share"`
+	Timestamp time.Time                    `json:"timestamp"`
+	Server    Server                       `json:"server"`
+	Client    Client                       `json:"client"`
+	Ping      float64                      `json:"ping"`
+	Jitter    float64                      `json:"jitter"`
+	Upload    defs.TransferSummaryResponse `json:"upload"`
+	Download  defs.TransferSummaryResponse `json:"download"`
+	Share     string                       `json:"share"`
 }
 
 // Server represents the speed test server's information
