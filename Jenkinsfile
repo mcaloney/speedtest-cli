@@ -5,11 +5,11 @@ node {
         checkout scm
       }
       withEnv(['GOCACHE=/go/.cache', 'GOOS=linux']) {
-        stage("build-arm") {
-          sh "GOARCH=arm ./build.sh"
-        }
-        stage("build-amd64") {
-          sh "GOARCH=amd64 ./build.sh"
+        stage("build") {
+          def archs=["arm", "amd64", "mipsle"]
+          archs.each {
+            sh "GOARCH=${it} ./build.sh"
+          }
         }
       }
       stage("package") {
