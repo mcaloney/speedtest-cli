@@ -20,6 +20,7 @@ type JSONReport struct {
 
 // Server represents the speed test server's information
 type Server struct {
+	ID       int    `json:"id"`
 	Name     string `json:"name"`
 	URL      string `json:"url"`
 	Location string `json:"location"`

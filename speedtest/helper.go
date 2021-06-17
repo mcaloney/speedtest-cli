@@ -169,6 +169,7 @@ func doSpeedTest(c *cli.Context, servers []defs.Server, telemetryServer defs.Tel
 				rep.Upload = uploadResult
 				rep.Share = shareLink
 
+				rep.Server.ID = currentServer.ID
 				rep.Server.Name = currentServer.Name
 				rep.Server.URL = u.String()
 				rep.Server.Location = currentServer.Location
