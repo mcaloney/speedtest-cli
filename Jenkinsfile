@@ -14,9 +14,9 @@ node {
       }
       stage("package") {
         def archMap = [arm: "armv7", arm64: "aarch64", mipsle: "mips32", amd64: "amd64"]
-        archMap.each(entry -> {
+        archMap.each { entry ->
           sh "mv out/librespeed-cli-linux-${entry.key} out/librespeed-cli-${entry.value}"
-        })
+        }
         archiveArtifacts artifacts: "out/librespeed-cli-*", followSymlinks: false
       }
     }
